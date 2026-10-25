@@ -1,0 +1,26 @@
+{
+  "name": "context-diet",
+  "version": "0.1.0",
+  "description": "A deterministic diet for agent context: shrink logs, outputs, and repeated turns with an exact manifest. No model, no network, nothing invented.",
+  "type": "module",
+  "bin": {
+    "context-diet": "./dist/cli.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "prepare": "npm run build",
+    "test": "node --test tests/tokens.test.js tests/dedupe.test.js tests/extract.test.js tests/summarize.test.js tests/pack.test.js tests/server.test.js"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "license": "MIT",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.32.2",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.5",
+    "typescript": "^7.0.2"
+  }
+}
