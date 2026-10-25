@@ -76,13 +76,13 @@ first npm publish — see Roadmap.)
 
 ```bash
 # How big is this log, really?
-context-diet count --input ci.log
+node dist/cli.js count --input ci.log
 
 # Just the failures and their surroundings:
-context-diet extract --input ci.log --query "timeout database"
+node dist/cli.js extract --input ci.log --query "timeout database"
 
 # Fit it into 300 tokens, with receipts:
-context-diet pack --input ci.log --budget 300
+node dist/cli.js pack --input ci.log --budget 300
 ```
 
 ## What it is not
