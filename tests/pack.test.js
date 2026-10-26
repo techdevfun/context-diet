@@ -60,3 +60,53 @@ test("pack manifest arithmetic holds with near-duplicates, counted separately", 
   assert.ok(dedupeStage.note.includes("near-duplicate"));
   assert.equal(manifest.verbatim, true);
 });
+
+test("pack keeps protected lines and reports them in the manifest", () => {
+  const doc = [
+    "# Notes",
+    "Alpha step completed.",
+    "Beta step completed.",
+    "REQUIREMENT: refunds must be idempotent.",
+    "Gamma step completed.",
+    "Delta step completed.",
+    "Error: checkout failed.",
+  ].join("\n") + "\n";
+  const unprotected = packText(doc, { budgetTokens: 25 });
+  assert.ok(!unprotected.text.includes("REQUIREMENT: refunds must be idempotent."));
+  const { text, manifest } = packText(doc, {
+    budgetTokens: 25,
+    protectLines: ["REQUIREMENT: refunds must be idempotent."],
+  });
+  assert.ok(text.includes("REQUIREMENT: refunds must be idempotent."));
+  assert.equal(manifest.protected.kept, 1);
+  assert.deepEqual(manifest.protected.missing, []);
+  assert.equal(manifest.protected.shortfall, false);
+  assert.equal(splitLines(text).length + manifest.droppedLines, splitLines(doc).length);
+});
+
+test("pack fails instead of shipping when extract drops a protected line", () => {
+  const doc = [
+    "REQUIREMENT: refunds must be idempotent.",
+    "Alpha step completed.",
+    "Beta step completed.",
+    "Gamma step completed.",
+    "Delta step completed.",
+    "Error: database timeout after 30s.",
+  ].join("\n") + "\n";
+  assert.throws(
+    () => packText(doc, {
+      budgetTokens: 500,
+      query: "database",
+      protectLines: ["REQUIREMENT: refunds must be idempotent."],
+    }),
+    /Protected content lost/,
+  );
+  const partial = packText(doc, {
+    budgetTokens: 500,
+    query: "database",
+    protectLines: ["REQUIREMENT: refunds must be idempotent."],
+    protectMode: "partial",
+  });
+  assert.deepEqual(partial.manifest.protected.missing, ["REQUIREMENT: refunds must be idempotent."]);
+  assert.equal(partial.manifest.protected.shortfall, true);
+});
