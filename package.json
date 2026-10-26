@@ -1,6 +1,6 @@
 {
   "name": "context-diet",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "A deterministic diet for agent context: shrink logs, outputs, and repeated turns with an exact manifest. No model, no network, nothing invented.",
   "type": "module",
   "bin": {
@@ -9,7 +9,7 @@
   "scripts": {
     "build": "tsc",
     "prepare": "npm run build",
-    "test": "node --test tests/tokens.test.js tests/dedupe.test.js tests/extract.test.js tests/summarize.test.js tests/pack.test.js tests/server.test.js"
+    "test": "node --test tests/tokens.test.js tests/dedupe.test.js tests/extract.test.js tests/summarize.test.js tests/pack.test.js tests/completeness.test.js tests/server.test.js"
   },
   "engines": {
     "node": ">=20"
