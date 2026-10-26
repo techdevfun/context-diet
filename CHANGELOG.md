@@ -1,5 +1,29 @@
 # Changelog
 
+## 0.3.0 — 2026-10-26
+
+Protected lines / must-keep lines (from dev.to reader feedback: small
+details that change an approved decision must not be summarized away).
+
+- `diet_summarize` and `diet_pack` accept `protectLines`: verbatim
+  lines that must survive, supplied explicitly by the caller — never a
+  guessed pattern. Protected lines are kept first, ahead of error lines.
+- If protected lines alone exceed the budget, fail mode (default)
+  throws instead of dropping them; partial mode keeps them and flags
+  `shortfall` for diagnostics only, never as a successful compression.
+- The pack manifest reports protected kept vs missing, and the pack
+  end-check refuses to ship when an earlier stage (notably extract)
+  dropped a protected line.
+- Deliberate boundary: this tool does not detect semantic
+  contradictions between protected requirements (it matches text, it
+  does not understand meaning). The over-budget/missing report, naming
+  every protected line at stake, is the conflict report.
+- Measured via CLI: a requirement line mid-section is dropped at
+  budget 25 without protection (2 lines kept) but kept with protection
+  (protectedKept 1, shortfall false); protection needing ~11 estimated
+  tokens against a 10 budget throws in fail mode and flags shortfall in
+  partial mode.
+
 ## 0.2.0 — 2026-10-26
 
 Near-duplicate dedupe (from dev.to reader feedback: repeated stack
