@@ -13,7 +13,7 @@ model — and proves every cut with a manifest.
 
 ## How it works
 
-Context Diet is an MCP server (plus a CLI) with five tools:
+Context Diet is an MCP server (plus a CLI) with six tools:
 
 | Tool | What it does |
 |---|---|
@@ -22,6 +22,7 @@ Context Diet is an MCP server (plus a CLI) with five tools:
 | `diet_extract` | Relevance-ranked excerpts for a query |
 | `diet_summarize` | Extractive summary to a token budget |
 | `diet_pack` | Full pipeline + a manifest for every line |
+| `diet_check` | Planned-vs-executed completeness: which planned items survived in an output |
 
 Near-duplicates: repeated stack traces that differ only in `0x` memory
 addresses collapse to their first occurrence, which is kept verbatim with
@@ -42,6 +43,19 @@ caller list, never a guessed pattern, and this tool does not detect
 semantic contradictions between requirements: the over-budget/missing
 report, naming every protected line at stake, is the conflict report —
 it never silently chooses which requirement to drop.
+
+Completeness check: give `diet_check` (or CLI `check`) a plan — the
+items that were supposed to appear, e.g. test names — and an output,
+possibly already trimmed. Each item is found when some output line
+contains it verbatim as a substring (case-sensitive); every found item
+carries its evidence line, and missing items are listed by name. The
+result is the durable sidecar record: keep it outside the trimmed
+artifact, never appended inside it. The loud channel is separate: the
+CLI exits non-zero when the check fails, so CI goes red exactly when
+a sentinel did not survive. Quiet when OK, loud when broken. The
+check is one-directional by design — it does not detect
+executed-but-unplanned items — and short identifiers can
+false-positive inside longer ones, so use specific identifiers.
 
 The core promise is negative and checkable: **output lines are always
 copied verbatim from the input.** Context Diet never invents,
