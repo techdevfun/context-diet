@@ -32,6 +32,17 @@ meaningful identifiers. This is text matching, not proof that two
 failures share a fix. Pass `--exact-only` (CLI) or `exactOnly` (MCP)
 for strict byte-identical matching.
 
+Protected lines: pass verbatim lines that must survive (`protectLines`
+in `diet_summarize`/`diet_pack`, `--protect-file` in the CLI). They
+are kept first, ahead of error lines. If they alone exceed the budget,
+fail mode (default) throws instead of dropping them; partial mode
+keeps them and flags `shortfall` for diagnostics only. The pack
+manifest reports protected kept vs missing. Protection is an explicit
+caller list, never a guessed pattern, and this tool does not detect
+semantic contradictions between requirements: the over-budget/missing
+report, naming every protected line at stake, is the conflict report —
+it never silently chooses which requirement to drop.
+
 The core promise is negative and checkable: **output lines are always
 copied verbatim from the input.** Context Diet never invents,
 paraphrases, or rewrites text. If a detail matters, it is either in the
