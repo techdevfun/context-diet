@@ -42,3 +42,46 @@ test("noise lines (blank, timestamp-only, decoration) are dropped and counted", 
   assert.ok(out.droppedNoiseLines >= 3);
   assert.ok(!out.text.includes("2026-10-25T10:00:00Z"));
 });
+
+test("protected lines survive a tight budget that would otherwise drop them", () => {
+  const protectedLine = "Step three finished without incident.";
+  const unprotected = summarizeText(DOC, 25);
+  assert.ok(!unprotected.text.includes(protectedLine));
+  const out = summarizeText(DOC, 25, { protectLines: [protectedLine] });
+  assert.ok(out.text.includes(protectedLine));
+  assert.equal(out.protectedKept, 1);
+  assert.equal(out.shortfall, false);
+  assert.deepEqual(out.protectedMissing, []);
+});
+
+test("over-budget protection throws in fail mode (default)", () => {
+  const lines = [
+    "Step three finished without incident.",
+    "Step four finished without incident.",
+    "Step five finished without incident.",
+  ];
+  assert.throws(
+    () => summarizeText(DOC, 10, { protectLines: lines }),
+    /exceeding the 10 budget/,
+  );
+});
+
+test("over-budget protection in partial mode keeps protected lines and flags shortfall", () => {
+  const lines = [
+    "Step three finished without incident.",
+    "Step four finished without incident.",
+    "Step five finished without incident.",
+  ];
+  const out = summarizeText(DOC, 10, { protectLines: lines, protectMode: "partial" });
+  for (const line of lines) assert.ok(out.text.includes(line));
+  assert.equal(out.protectedOverBudget, true);
+  assert.equal(out.shortfall, true);
+  assert.ok(estimateTokens(out.text) > 10);
+});
+
+test("protected strings absent from the input are reported missing, not thrown", () => {
+  const out = summarizeText(DOC, 500, { protectLines: ["No such requirement line."] });
+  assert.deepEqual(out.protectedMissing, ["No such requirement line."]);
+  assert.equal(out.protectedKept, 0);
+  assert.equal(out.shortfall, false);
+});
