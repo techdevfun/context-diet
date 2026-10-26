@@ -6,9 +6,10 @@ import { dedupeText } from "./dedupe.js";
 import { extractText } from "./extract.js";
 import { summarizeText } from "./summarize.js";
 import { packText } from "./pack.js";
+import { checkCompleteness } from "./completeness.js";
 
 const USAGE = `context-diet <tool> [options]
-Tools: count | dedupe | extract | summarize | pack | serve (MCP server over stdio)
+Tools: count | dedupe | extract | summarize | pack | check | serve (MCP server over stdio)
 Options:
   --input <file>   Read input from a file (must be under --root; default: stdin)
   --root <dir>     Allowed root for --input (default: current working directory)
@@ -17,6 +18,7 @@ Options:
   --exact-only     Dedupe/pack: strict byte-identical matching only (no near-duplicate collapse)
   --protect-file <file>  Lines that must survive summarize/pack (one verbatim line per line; blank lines ignored; must be under --root)
   --protect-mode <fail|partial>  Over-budget protection: fail (default, throw) or partial (diagnostics-only, shortfall flagged)
+  --planned <file> Planned items for check (one per line; blank lines ignored; must be under --root)
   --text           Print only the reduced text (default: JSON with manifest)
 `;
 
@@ -54,18 +56,26 @@ function readInput(args: Record<string, string | boolean>): string {
 }
 
 function readProtectFile(args: Record<string, string | boolean>): string[] {
-  if (typeof args["protect-file"] !== "string" || args["protect-file"] === "") {
+  return readListFile(args, "protect-file");
+}
+
+function readPlannedFile(args: Record<string, string | boolean>): string[] {
+  return readListFile(args, "planned");
+}
+
+function readListFile(args: Record<string, string | boolean>, key: string): string[] {
+  if (typeof args[key] !== "string" || args[key] === "") {
     return [];
   }
   const root = resolve(String(args["root"] ?? process.cwd()));
-  const file = resolve(root, String(args["protect-file"]));
+  const file = resolve(root, String(args[key]));
   const rel = relative(root, file);
   if (rel.startsWith(".." + sep) || rel === ".." || resolve(file) === root) {
-    throw new Error(`Refusing to read outside --root: ${args["protect-file"]}`);
+    throw new Error(`Refusing to read outside --root: ${args[key]}`);
   }
-  // One verbatim protected line per line; blank lines carry no meaning
-  // and are ignored. A trailing \r (Windows line endings) is stripped so
-  // the same file works on both line-ending conventions.
+  // One item per line; blank lines carry no meaning and are ignored.
+  // A trailing \r (Windows line endings) is stripped so the same file
+  // works on both line-ending conventions.
   return splitLines(readFileSync(file, "utf8"))
     .map((l) => (l.endsWith("\r") ? l.slice(0, -1) : l))
     .filter((l) => l !== "");
@@ -111,6 +121,31 @@ async function main(): Promise<void> {
         protectMode,
       });
       break;
+    case "check": {
+      // Two channels, per the completeness design: stdout carries the
+      // durable sidecar record; a non-zero exit is the loud channel
+      // (CI red) that fires only when a sentinel did not survive.
+      // Quiet when OK, loud when broken — never the reverse.
+      const planned = readPlannedFile(args);
+      const check = checkCompleteness(text, planned);
+      if (!check.survived) {
+        process.stderr.write(
+          `diet_check: INCOMPLETE — ${check.missingCount} of ${check.plannedCount} planned items missing from output (see manifest).\n`,
+        );
+        process.exitCode = 1;
+      }
+      if (asText) {
+        process.stdout.write(
+          (check.survived
+            ? `COMPLETE (${check.foundCount}/${check.plannedCount} planned items found)\n`
+            : `INCOMPLETE (${check.foundCount}/${check.plannedCount} found; ${check.missingCount} missing)\n`) +
+            check.missing.map((m) => `${m}\n`).join(""),
+        );
+      } else {
+        process.stdout.write(JSON.stringify(check, null, 2) + "\n");
+      }
+      return;
+    }
     default:
       process.stderr.write(`Unknown tool: ${tool}\n${USAGE}`);
       process.exit(1);
