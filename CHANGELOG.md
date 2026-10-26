@@ -1,5 +1,39 @@
 # Changelog
 
+## 0.5.0 — 2026-10-26
+
+Marker mode for the completeness check (from dev.to reader
+feedback: a log reciting the plan scored 5/5, survived, exit 0
+without executing anything).
+
+- `diet_check` / CLI `check` accept `markers` (`--markers` file):
+  a non-empty list enables marker mode, in which a line counts as
+  execution evidence only when it contains the item verbatim AND
+  carries a marker on word boundaries (PASS matches "PASS t1" but
+  not "BYPASS t1"). Among the lines containing an item, the first
+  marked line decides: a fail marker on it means executed-fail,
+  otherwise executed-pass; an item with no marked containing line
+  is missing, even if unmarked lines recite it.
+- Buckets replace the scalar: executed-pass / executed-fail /
+  missing / caller-declared skip, with `survived` requiring nothing
+  missing and nothing failed in marker mode. Fail markers default
+  to `["FAIL"]` unless the caller overrides (including [] to
+  disable); fail markers without markers are an error.
+- Caller-declared skips (`skipped` / `--skipped` file) are plan
+  changes, not executions: trusted, listed by name, carrying no
+  evidence, never counted as missing. The check does not verify
+  skips against the output and does not claim to.
+- Deliberate boundaries: one-directional only; marked evidence is
+  text presence, not proof against a log that echoes markers —
+  keep the plan and the output in separate channels and audit
+  evidence lines; an earlier FAIL is not erased by a later PASS.
+  Plain mode (no markers) is unchanged.
+- Measured via CLI: echo fixture (5 plan lines, no markers) →
+  0 executed-pass, 5 missing, exit 1; mixed run (2 PASS, 1 FAIL,
+  1 declared skip, 1 absent) → 2 executed-pass, 1 executed-fail,
+  1 skipped, 1 missing, exit 1; clean run (2 PASS, 1 declared
+  skip) → survived, exit 0. Suite 52/52 green.
+
 ## 0.4.0 — 2026-10-26
 
 Planned-vs-executed completeness check (from dev.to reader feedback:

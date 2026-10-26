@@ -27,7 +27,7 @@ function textResult(value: unknown): {
 export function createServer(): McpServer {
   const server = new McpServer({
     name: "context-diet",
-    version: "0.4.0",
+    version: "0.5.0",
   });
 
   server.tool(
@@ -105,14 +105,17 @@ export function createServer(): McpServer {
 
   server.tool(
     "diet_check",
-    "Planned-vs-executed completeness check: verify every planned item (e.g. test names) appears in an output, possibly already trimmed. Each item is found when some output line contains it verbatim as a substring (case-sensitive); every found item carries its evidence line, and missing items are listed by name. The result is the durable sidecar record — keep it outside the trimmed artifact. For a CI-red signal, use the CLI, which exits non-zero when the check fails.",
+    "Planned-vs-executed completeness check: verify every planned item (e.g. test names) appears in an output, possibly already trimmed. Plain mode: each item is found when some output line contains it verbatim as a substring (case-sensitive); every found item carries its evidence line, and missing items are listed by name. Marker mode (markers supplied): a line counts as execution evidence only when it contains the item AND carries a marker on word boundaries, so a log that merely recites the plan scores 0 executed-pass; the first marked line decides (fail marker on it means executed-fail), and survived requires nothing missing and nothing failed. Caller-declared skips (skipped) are listed by name, trusted, and never count as missing. The result is the durable sidecar record — keep it outside the trimmed artifact. For a CI-red signal, use the CLI, which exits non-zero when the check fails. Limits: one-directional (no executed-but-unplanned detection); marked evidence is text presence, not proof against a log that echoes markers — keep plan and output in separate channels and audit evidence lines.",
     {
       text: z.string().describe("The output to verify (possibly already trimmed)."),
       planned: z.array(z.string()).describe("Planned items that must appear, verbatim (blank strings ignored)."),
+      markers: z.array(z.string()).optional().describe("Execution markers (e.g. PASS, FAIL, [run]); a non-empty list enables marker mode: only lines carrying a marker on word boundaries count as evidence."),
+      failMarkers: z.array(z.string()).optional().describe("Markers meaning failure (default [\"FAIL\"] when marker mode is on and this is omitted; [] disables). Requires markers; without markers it throws."),
+      skipped: z.array(z.string()).optional().describe("Caller-declared skips: plan changes, trusted, listed by name, never counted as missing."),
     },
-    async ({ text, planned }) => {
+    async ({ text, planned, markers, failMarkers, skipped }) => {
       checkSize(text);
-      return textResult(checkCompleteness(text, planned));
+      return textResult(checkCompleteness(text, planned, { markers, failMarkers, skipped }));
     },
   );
 

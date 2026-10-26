@@ -19,6 +19,9 @@ Options:
   --protect-file <file>  Lines that must survive summarize/pack (one verbatim line per line; blank lines ignored; must be under --root)
   --protect-mode <fail|partial>  Over-budget protection: fail (default, throw) or partial (diagnostics-only, shortfall flagged)
   --planned <file> Planned items for check (one per line; blank lines ignored; must be under --root)
+  --markers <file> Execution markers for check marker mode (one per line; blank lines ignored; must be under --root)
+  --fail-markers <file> Markers meaning failure for check (default ["FAIL"] when marker mode is on; requires --markers)
+  --skipped <file> Caller-declared skips for check (one per line; trusted, listed by name, never counted as missing; must be under --root)
   --text           Print only the reduced text (default: JSON with manifest)
 `;
 
@@ -61,6 +64,21 @@ function readProtectFile(args: Record<string, string | boolean>): string[] {
 
 function readPlannedFile(args: Record<string, string | boolean>): string[] {
   return readListFile(args, "planned");
+}
+
+function readMarkersFile(args: Record<string, string | boolean>): string[] {
+  return readListFile(args, "markers");
+}
+
+function readFailMarkersFile(args: Record<string, string | boolean>): string[] | undefined {
+  if (typeof args["fail-markers"] !== "string" || args["fail-markers"] === "") {
+    return undefined;
+  }
+  return readListFile(args, "fail-markers");
+}
+
+function readSkippedFile(args: Record<string, string | boolean>): string[] {
+  return readListFile(args, "skipped");
 }
 
 function readListFile(args: Record<string, string | boolean>, key: string): string[] {
@@ -127,19 +145,51 @@ async function main(): Promise<void> {
       // (CI red) that fires only when a sentinel did not survive.
       // Quiet when OK, loud when broken — never the reverse.
       const planned = readPlannedFile(args);
-      const check = checkCompleteness(text, planned);
+      const markers = readMarkersFile(args);
+      const failMarkers = readFailMarkersFile(args);
+      const skipped = readSkippedFile(args);
+      const check = checkCompleteness(text, planned, { markers, failMarkers, skipped });
+      const markerMode = markers.length > 0;
       if (!check.survived) {
-        process.stderr.write(
-          `diet_check: INCOMPLETE — ${check.missingCount} of ${check.plannedCount} planned items missing from output (see manifest).\n`,
-        );
+        if (markerMode && check.missingCount === 0 && check.executedFailCount > 0) {
+          process.stderr.write(
+            `diet_check: FAILED — ${check.executedFailCount} of ${check.plannedCount} planned items executed with failure (see manifest).\n`,
+          );
+        } else {
+          process.stderr.write(
+            `diet_check: INCOMPLETE — ${check.missingCount} of ${check.plannedCount} planned items missing from output` +
+              (markerMode && check.executedFailCount > 0
+                ? `, ${check.executedFailCount} executed-fail`
+                : "") +
+              ` (see manifest).\n`,
+          );
+        }
         process.exitCode = 1;
       }
       if (asText) {
+        let summary: string;
+        if (check.survived) {
+          summary = markerMode
+            ? `COMPLETE (${check.executedPassCount} executed-pass/${check.plannedCount} planned` +
+              (check.skippedCount > 0 ? `; ${check.skippedCount} skipped` : "") +
+              `)\n`
+            : `COMPLETE (${check.foundCount}/${check.plannedCount} planned items found)\n`;
+        } else if (markerMode && check.missingCount === 0 && check.executedFailCount > 0) {
+          summary =
+            `FAILED (${check.foundCount}/${check.plannedCount} found; ${check.executedFailCount} executed-fail` +
+            (check.skippedCount > 0 ? `; ${check.skippedCount} skipped` : "") +
+            `)\n`;
+        } else {
+          summary =
+            `INCOMPLETE (${check.foundCount}/${check.plannedCount} found; ${check.missingCount} missing` +
+            (markerMode && check.executedFailCount > 0
+              ? `; ${check.executedFailCount} executed-fail`
+              : "") +
+            (check.skippedCount > 0 ? `; ${check.skippedCount} skipped` : "") +
+            `)\n`;
+        }
         process.stdout.write(
-          (check.survived
-            ? `COMPLETE (${check.foundCount}/${check.plannedCount} planned items found)\n`
-            : `INCOMPLETE (${check.foundCount}/${check.plannedCount} found; ${check.missingCount} missing)\n`) +
-            check.missing.map((m) => `${m}\n`).join(""),
+          summary + check.missing.map((m) => `${m}\n`).join(""),
         );
       } else {
         process.stdout.write(JSON.stringify(check, null, 2) + "\n");

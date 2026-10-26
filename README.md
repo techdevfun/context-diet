@@ -57,6 +57,23 @@ check is one-directional by design — it does not detect
 executed-but-unplanned items — and short identifiers can
 false-positive inside longer ones, so use specific identifiers.
 
+Marker mode (opt-in): pass execution markers and a line counts as
+execution evidence only when it contains the item verbatim AND
+carries a marker on word boundaries, so a log that merely recites
+the plan scores 0 executed-pass. Among the lines containing an
+item, the first marked line decides: a fail marker on it means
+executed-fail, otherwise executed-pass, and survived requires
+nothing missing and nothing failed. Markers are caller-supplied
+(`markers` / `--markers`); fail markers default to `["FAIL"]`
+unless the caller overrides, and fail markers without markers are
+an error. Caller-declared skips (`skipped` / `--skipped`) are
+plan changes, not executions: the check trusts the declaration,
+lists skips by name, and never counts them as missing. Limits,
+stated plainly: marked evidence is text presence, not proof
+against a log that echoes markers — keep the plan and the output
+in separate channels and audit evidence lines; an earlier FAIL is
+not erased by a later PASS, because the first marked line decides.
+
 The core promise is negative and checkable: **output lines are always
 copied verbatim from the input.** Context Diet never invents,
 paraphrases, or rewrites text. If a detail matters, it is either in the
