@@ -6,6 +6,7 @@ import { dedupeText } from "./dedupe.js";
 import { extractText } from "./extract.js";
 import { summarizeText } from "./summarize.js";
 import { packText } from "./pack.js";
+import { checkCompleteness } from "./completeness.js";
 
 const MAX_INPUT_CHARS = 1_000_000;
 
@@ -26,7 +27,7 @@ function textResult(value: unknown): {
 export function createServer(): McpServer {
   const server = new McpServer({
     name: "context-diet",
-    version: "0.3.0",
+    version: "0.4.0",
   });
 
   server.tool(
@@ -99,6 +100,19 @@ export function createServer(): McpServer {
     async ({ text, budgetTokens, query, windowLines, maxChunks, exactOnly, protectLines, protectMode }) => {
       checkSize(text);
       return textResult(packText(text, { budgetTokens, query, windowLines, maxChunks, exactOnly: exactOnly ?? false, protectLines, protectMode }));
+    },
+  );
+
+  server.tool(
+    "diet_check",
+    "Planned-vs-executed completeness check: verify every planned item (e.g. test names) appears in an output, possibly already trimmed. Each item is found when some output line contains it verbatim as a substring (case-sensitive); every found item carries its evidence line, and missing items are listed by name. The result is the durable sidecar record — keep it outside the trimmed artifact. For a CI-red signal, use the CLI, which exits non-zero when the check fails.",
+    {
+      text: z.string().describe("The output to verify (possibly already trimmed)."),
+      planned: z.array(z.string()).describe("Planned items that must appear, verbatim (blank strings ignored)."),
+    },
+    async ({ text, planned }) => {
+      checkSize(text);
+      return textResult(checkCompleteness(text, planned));
     },
   );
 
