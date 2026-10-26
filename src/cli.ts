@@ -14,6 +14,7 @@ Options:
   --root <dir>     Allowed root for --input (default: current working directory)
   --query <text>   Query for extract / pack
   --budget <n>     Token budget for summarize / pack (default 500)
+  --exact-only     Dedupe/pack: strict byte-identical matching only (no near-duplicate collapse)
   --text           Print only the reduced text (default: JSON with manifest)
 `;
 
@@ -24,7 +25,7 @@ function parseArgs(argv: string[]): Record<string, string | boolean> {
     const arg = argv[i];
     if (arg.startsWith("--")) {
       const key = arg.slice(2);
-      if (key === "text") {
+      if (key === "text" || key === "exact-only") {
         out[key] = true;
       } else {
         out[key] = argv[++i] ?? "";
@@ -71,7 +72,7 @@ async function main(): Promise<void> {
       result = countText(text);
       break;
     case "dedupe":
-      result = dedupeText(text);
+      result = dedupeText(text, { exactOnly: args["exact-only"] === true });
       break;
     case "extract":
       result = extractText(text, String(args["query"] ?? ""));
@@ -83,6 +84,7 @@ async function main(): Promise<void> {
       result = packText(text, {
         budgetTokens: budget,
         query: typeof args["query"] === "string" ? args["query"] : undefined,
+        exactOnly: args["exact-only"] === true,
       });
       break;
     default:
