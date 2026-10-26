@@ -31,6 +31,8 @@ export interface PackOptions {
   budgetTokens: number;
   windowLines?: number;
   maxChunks?: number;
+  /** Passed to the dedupe stage: true = strict byte-identical matching only. */
+  exactOnly?: boolean;
 }
 
 function plural(n: number, singular: string, pluralForm?: string): string {
@@ -57,15 +59,24 @@ export function packText(rawText: string, options: PackOptions): PackResult {
     note: "ANSI escape sequences removed; line counts rarely change here.",
   });
 
-  const deduped = dedupeText(stripped);
+  const deduped = dedupeText(stripped, { exactOnly: options.exactOnly ?? false });
   const dedupedCounts = countText(deduped.text);
+  const dedupeNoteParts = [
+    `${plural(deduped.removedDuplicateLines, "duplicate line")}, ${plural(deduped.removedDuplicateBlocks, "duplicate block")} (${plural(deduped.removedBlockLines, "line")}) removed.`,
+  ];
+  if (deduped.removedNearDuplicateLines > 0 || deduped.removedNearDuplicateBlocks > 0) {
+    dedupeNoteParts.push(
+      `${plural(deduped.removedNearDuplicateLines, "near-duplicate line")} (0x addresses only), ${plural(deduped.removedNearDuplicateBlocks, "near-duplicate block")} (${plural(deduped.removedNearBlockLines, "line")}) removed.`,
+    );
+  }
   stages.push({
     stage: "dedupe",
     in: strippedCounts,
     out: dedupedCounts,
     droppedLines:
-      deduped.removedDuplicateLines + deduped.removedBlockLines,
-    note: `${plural(deduped.removedDuplicateLines, "duplicate line")}, ${plural(deduped.removedDuplicateBlocks, "duplicate block")} (${plural(deduped.removedBlockLines, "line")}) removed.`,
+      deduped.removedDuplicateLines + deduped.removedBlockLines +
+      deduped.removedNearDuplicateLines + deduped.removedNearBlockLines,
+    note: dedupeNoteParts.join(" "),
   });
 
   let currentText = deduped.text;
