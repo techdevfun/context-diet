@@ -18,10 +18,19 @@ Context Diet is an MCP server (plus a CLI) with five tools:
 | Tool | What it does |
 |---|---|
 | `diet_count` | Lines, bytes, and estimated tokens of a text |
-| `diet_dedupe` | Removes exact duplicate lines and repeated blocks |
+| `diet_dedupe` | Removes duplicate lines and repeated blocks (traces differing only in 0x addresses collapse too, first occurrence kept verbatim) |
 | `diet_extract` | Relevance-ranked excerpts for a query |
 | `diet_summarize` | Extractive summary to a token budget |
 | `diet_pack` | Full pipeline + a manifest for every line |
+
+Near-duplicates: repeated stack traces that differ only in `0x` memory
+addresses collapse to their first occurrence, which is kept verbatim with
+its location; later locations are counted (not kept) and reported
+separately from exact duplicates in the manifest. Bare hex without a
+`0x` prefix, timestamps, and PIDs are left exact, because they may be
+meaningful identifiers. This is text matching, not proof that two
+failures share a fix. Pass `--exact-only` (CLI) or `exactOnly` (MCP)
+for strict byte-identical matching.
 
 The core promise is negative and checkable: **output lines are always
 copied verbatim from the input.** Context Diet never invents,
