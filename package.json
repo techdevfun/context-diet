@@ -1,6 +1,6 @@
 {
   "name": "context-diet",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "A deterministic diet for agent context: shrink logs, outputs, and repeated turns with an exact manifest. No model, no network, nothing invented.",
   "type": "module",
   "bin": {
