@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import { readFileSync } from "node:fs";
 import { resolve, relative, sep } from "node:path";
-import { countText } from "./tokens.js";
+import { countText, splitLines } from "./tokens.js";
 import { dedupeText } from "./dedupe.js";
 import { extractText } from "./extract.js";
 import { summarizeText } from "./summarize.js";
@@ -15,6 +15,8 @@ Options:
   --query <text>   Query for extract / pack
   --budget <n>     Token budget for summarize / pack (default 500)
   --exact-only     Dedupe/pack: strict byte-identical matching only (no near-duplicate collapse)
+  --protect-file <file>  Lines that must survive summarize/pack (one verbatim line per line; blank lines ignored; must be under --root)
+  --protect-mode <fail|partial>  Over-budget protection: fail (default, throw) or partial (diagnostics-only, shortfall flagged)
   --text           Print only the reduced text (default: JSON with manifest)
 `;
 
@@ -51,6 +53,24 @@ function readInput(args: Record<string, string | boolean>): string {
   return readFileSync(0, "utf8");
 }
 
+function readProtectFile(args: Record<string, string | boolean>): string[] {
+  if (typeof args["protect-file"] !== "string" || args["protect-file"] === "") {
+    return [];
+  }
+  const root = resolve(String(args["root"] ?? process.cwd()));
+  const file = resolve(root, String(args["protect-file"]));
+  const rel = relative(root, file);
+  if (rel.startsWith(".." + sep) || rel === ".." || resolve(file) === root) {
+    throw new Error(`Refusing to read outside --root: ${args["protect-file"]}`);
+  }
+  // One verbatim protected line per line; blank lines carry no meaning
+  // and are ignored. A trailing \r (Windows line endings) is stripped so
+  // the same file works on both line-ending conventions.
+  return splitLines(readFileSync(file, "utf8"))
+    .map((l) => (l.endsWith("\r") ? l.slice(0, -1) : l))
+    .filter((l) => l !== "");
+}
+
 async function main(): Promise<void> {
   const args = parseArgs(process.argv.slice(2));
   const tool = String(args["_tool"] ?? "");
@@ -66,6 +86,8 @@ async function main(): Promise<void> {
   const text = readInput(args);
   const budget = Number(args["budget"] ?? 500);
   const asText = args["text"] === true;
+  const protectLines = readProtectFile(args);
+  const protectMode = args["protect-mode"] === "partial" ? "partial" : "fail";
   let result: unknown;
   switch (tool) {
     case "count":
@@ -78,13 +100,15 @@ async function main(): Promise<void> {
       result = extractText(text, String(args["query"] ?? ""));
       break;
     case "summarize":
-      result = summarizeText(text, budget);
+      result = summarizeText(text, budget, { protectLines, protectMode });
       break;
     case "pack":
       result = packText(text, {
         budgetTokens: budget,
         query: typeof args["query"] === "string" ? args["query"] : undefined,
         exactOnly: args["exact-only"] === true,
+        protectLines,
+        protectMode,
       });
       break;
     default:
