@@ -26,7 +26,7 @@ function textResult(value: unknown): {
 export function createServer(): McpServer {
   const server = new McpServer({
     name: "context-diet",
-    version: "0.1.0",
+    version: "0.2.0",
   });
 
   server.tool(
@@ -42,11 +42,14 @@ export function createServer(): McpServer {
 
   server.tool(
     "diet_dedupe",
-    "Remove exact duplicate lines and repeated multi-line blocks, preserving order. Returns deduped text plus counts for the manifest.",
-    { text: z.string().describe("The text to dedupe.") },
-    async ({ text }) => {
+    "Remove duplicate lines and repeated multi-line blocks, preserving order. Lines differing only in 0x memory addresses count as near-duplicates: the first occurrence is kept verbatim and near removals are counted separately from exact ones. Pass exactOnly=true for strict byte-identical matching only. Returns deduped text plus counts for the manifest.",
+    {
+      text: z.string().describe("The text to dedupe."),
+      exactOnly: z.boolean().optional().describe("When true, only byte-identical lines/blocks are treated as duplicates (default false)."),
+    },
+    async ({ text, exactOnly }) => {
       checkSize(text);
-      return textResult(dedupeText(text));
+      return textResult(dedupeText(text, { exactOnly: exactOnly ?? false }));
     },
   );
 
@@ -87,10 +90,11 @@ export function createServer(): McpServer {
       query: z.string().optional().describe("Optional query for the extract stage."),
       windowLines: z.number().int().min(0).max(20).optional(),
       maxChunks: z.number().int().min(1).max(50).optional(),
+      exactOnly: z.boolean().optional().describe("Passed to the dedupe stage: true = strict byte-identical matching only."),
     },
-    async ({ text, budgetTokens, query, windowLines, maxChunks }) => {
+    async ({ text, budgetTokens, query, windowLines, maxChunks, exactOnly }) => {
       checkSize(text);
-      return textResult(packText(text, { budgetTokens, query, windowLines, maxChunks }));
+      return textResult(packText(text, { budgetTokens, query, windowLines, maxChunks, exactOnly: exactOnly ?? false }));
     },
   );
 
