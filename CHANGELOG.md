@@ -1,5 +1,32 @@
 # Changelog
 
+## 0.4.0 — 2026-10-26
+
+Planned-vs-executed completeness check (from dev.to reader feedback:
+a plan at the start and a smaller executed count at the end should
+make the skipped middle audible).
+
+- New tool `diet_check` (MCP) + CLI `check`: verify every planned
+  item appears in an output, possibly already trimmed, without
+  re-running anything. Each item is found when some output line
+  contains it verbatim as a substring (case-sensitive); every found
+  item carries its evidence line, missing items are listed by name,
+  and `survived` is true exactly when nothing is missing.
+- Two channels, as designed in the thread: the JSON result is the
+  durable sidecar record (quiet, diffable, kept outside the trimmed
+  artifact); the CLI exits non-zero when the check fails, so CI goes
+  red exactly when a sentinel did not survive. Quiet when OK, loud
+  when broken.
+- Deliberate boundaries: one-directional only (no
+  executed-but-unplanned detection without guessing a pattern);
+  substring matching can false-positive on short identifiers, so
+  callers should use specific identifiers and audit the evidence
+  lines.
+- Measured via CLI: 10 planned items against an 8-item output →
+  INCOMPLETE (8/10 found; missing t8, t9 by name), exit 1 with a
+  one-line stderr summary; the complete case reports COMPLETE (10/10)
+  with exit 0.
+
 ## 0.3.0 — 2026-10-26
 
 Protected lines / must-keep lines (from dev.to reader feedback: small
