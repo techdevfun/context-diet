@@ -48,3 +48,15 @@ test("pack on a real bloated log reduces lines substantially", () => {
   assert.ok(splitLines(text).length < splitLines(sessionLog()).length / 2);
   assert.ok(manifest.output.estTokens < manifest.input.estTokens);
 });
+
+test("pack manifest arithmetic holds with near-duplicates, counted separately", () => {
+  const trace = (addr) =>
+    `Error: segfault in worker pool\n  at worker.run (src/worker.cc:41) [${addr}]\n  at pool.dispatch (src/pool.cc:88) [${addr}]\n  at main (src/main.cc:12) [${addr}]\n`;
+  const input = trace("0x00007f8a3b2c100") + trace("0x00007f9c4d3e200") + trace("0x00007f1a2b3c500");
+  const { text, manifest } = packText(input, { budgetTokens: 500 });
+  assert.equal(splitLines(text).length, 4);
+  assert.equal(splitLines(text).length + manifest.droppedLines, splitLines(input).length);
+  const dedupeStage = manifest.stages.find((s) => s.stage === "dedupe");
+  assert.ok(dedupeStage.note.includes("near-duplicate"));
+  assert.equal(manifest.verbatim, true);
+});
