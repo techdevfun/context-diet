@@ -26,7 +26,7 @@ function textResult(value: unknown): {
 export function createServer(): McpServer {
   const server = new McpServer({
     name: "context-diet",
-    version: "0.2.0",
+    version: "0.3.0",
   });
 
   server.tool(
@@ -70,14 +70,16 @@ export function createServer(): McpServer {
 
   server.tool(
     "diet_summarize",
-    "Extractive summary to a token budget. Output lines are ALWAYS verbatim from the input — this tool never invents, paraphrases, or rewrites text. Error lines and headings are kept first.",
+    "Extractive summary to a token budget. Output lines are ALWAYS verbatim from the input — this tool never invents, paraphrases, or rewrites text. Error lines and headings are kept first. With protectLines, the listed verbatim lines are kept first; if they alone exceed the budget, fail mode (default) throws instead of dropping them, and partial mode keeps them with shortfall=true for diagnostics only.",
     {
       text: z.string().describe("The text to summarize."),
       budgetTokens: z.number().int().min(10).describe("Token budget for the summary (estimated tokens)."),
+      protectLines: z.array(z.string()).optional().describe("Verbatim lines that must survive (explicit list, never guessed patterns)."),
+      protectMode: z.enum(["fail", "partial"]).optional().describe("Over-budget protection behavior: fail (default, throw) or partial (keep protected lines, flag shortfall)."),
     },
-    async ({ text, budgetTokens }) => {
+    async ({ text, budgetTokens, protectLines, protectMode }) => {
       checkSize(text);
-      return textResult(summarizeText(text, budgetTokens));
+      return textResult(summarizeText(text, budgetTokens, { protectLines, protectMode }));
     },
   );
 
@@ -91,10 +93,12 @@ export function createServer(): McpServer {
       windowLines: z.number().int().min(0).max(20).optional(),
       maxChunks: z.number().int().min(1).max(50).optional(),
       exactOnly: z.boolean().optional().describe("Passed to the dedupe stage: true = strict byte-identical matching only."),
+      protectLines: z.array(z.string()).optional().describe("Verbatim lines that must survive the pack; the manifest reports kept vs missing, and fail mode (default) throws instead of shipping without them."),
+      protectMode: z.enum(["fail", "partial"]).optional().describe("Over-budget protection behavior: fail (default, throw) or partial (diagnostics-only result with shortfall=true)."),
     },
-    async ({ text, budgetTokens, query, windowLines, maxChunks, exactOnly }) => {
+    async ({ text, budgetTokens, query, windowLines, maxChunks, exactOnly, protectLines, protectMode }) => {
       checkSize(text);
-      return textResult(packText(text, { budgetTokens, query, windowLines, maxChunks, exactOnly: exactOnly ?? false }));
+      return textResult(packText(text, { budgetTokens, query, windowLines, maxChunks, exactOnly: exactOnly ?? false, protectLines, protectMode }));
     },
   );
 
