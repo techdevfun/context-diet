@@ -19,6 +19,23 @@ export interface PackManifest {
   droppedLines: number;
   /** True when every output line appears verbatim in the input. */
   verbatim: boolean;
+  /**
+   * Present only when protectLines were supplied. "kept" counts distinct
+   * protected strings present as output lines; "missing" lists protected
+   * strings absent from the final output (dropped by an earlier stage
+   * such as extract, or never present in the input). "shortfall" is true
+   * when the output is not a within-budget summary holding all protected
+   * content. This tool does not detect semantic contradictions between
+   * protected requirements: the over-budget/missing report, naming every
+   * protected string at stake, is the conflict report — it never
+   * silently chooses which requirement to drop.
+   */
+  protected?: {
+    kept: number;
+    missing: string[];
+    overBudget: boolean;
+    shortfall: boolean;
+  };
 }
 
 export interface PackResult {
@@ -33,6 +50,10 @@ export interface PackOptions {
   maxChunks?: number;
   /** Passed to the dedupe stage: true = strict byte-identical matching only. */
   exactOnly?: boolean;
+  /** Verbatim lines that must survive the pack (see SummarizeOptions). */
+  protectLines?: string[];
+  /** Passed to the summarize stage ("fail" default, "partial"). */
+  protectMode?: "fail" | "partial";
 }
 
 function plural(n: number, singular: string, pluralForm?: string): string {
@@ -98,21 +119,58 @@ export function packText(rawText: string, options: PackOptions): PackResult {
     currentCounts = extractedCounts;
   }
 
-  const summarized = summarizeText(currentText, options.budgetTokens);
+  const summarized = summarizeText(currentText, options.budgetTokens, {
+    protectLines: options.protectLines,
+    protectMode: options.protectMode,
+  });
   const summarizedCounts = countText(summarized.text);
+  const summarizeNoteParts = [
+    `${plural(summarized.droppedNoiseLines, "noise line")}, ${plural(summarized.droppedOverBudgetLines, "over-budget line")} dropped.`,
+  ];
+  if (options.protectLines && options.protectLines.length > 0) {
+    summarizeNoteParts.push(
+      `${plural(summarized.protectedKept, "protected line")} kept, ${plural(summarized.protectedMissing.length, "protected line")} missing.` +
+        (summarized.shortfall ? " SHORTFALL: protected content exceeded the budget (diagnostics only)." : ""),
+    );
+  }
   stages.push({
     stage: "summarize",
     in: currentCounts,
     out: summarizedCounts,
     droppedLines:
       summarized.droppedNoiseLines + summarized.droppedOverBudgetLines,
-    note: `${plural(summarized.droppedNoiseLines, "noise line")}, ${plural(summarized.droppedOverBudgetLines, "over-budget line")} dropped.`,
+    note: summarizeNoteParts.join(" "),
   });
 
   const output = summarizedCounts;
   const inputLines = new Set(stripped.split("\n"));
   const outputLines = summarized.text === "" ? [] : summarized.text.split("\n").filter((l, i, a) => !(i === a.length - 1 && l === ""));
   const verbatim = outputLines.every((l) => inputLines.has(l));
+
+  // End-check for protection: every protected string must appear as a
+  // line in the final output, whatever earlier stages did. The summarize
+  // stage already fails on over-budget protection in fail mode; this
+  // check catches protection lost earlier (notably by extract, which
+  // keeps only query chunks). It never silently ships without them.
+  let protectedSection: PackManifest["protected"];
+  if (options.protectLines && options.protectLines.length > 0) {
+    const outputSet = new Set(outputLines);
+    const distinctProtected = [...new Set(options.protectLines)];
+    const missing = distinctProtected.filter((s) => !outputSet.has(s));
+    const shortfall = summarized.shortfall || missing.length > 0;
+    if (missing.length > 0 && (options.protectMode ?? "fail") === "fail") {
+      throw new Error(
+        `Protected content lost before the final output (${missing.length} line(s) missing: ${missing.map((s) => JSON.stringify(s)).join(", ")}). ` +
+          `Refusing to ship a pack without protected content; raise the budget, narrow the query, or use protectMode "partial" for a diagnostics-only result.`,
+      );
+    }
+    protectedSection = {
+      kept: distinctProtected.length - missing.length,
+      missing,
+      overBudget: summarized.protectedOverBudget,
+      shortfall,
+    };
+  }
 
   return {
     text: summarized.text,
@@ -122,6 +180,7 @@ export function packText(rawText: string, options: PackOptions): PackResult {
       stages,
       droppedLines: input.lines - output.lines,
       verbatim,
+      ...(protectedSection ? { protected: protectedSection } : {}),
     },
   };
 }
