@@ -29,11 +29,12 @@ function parseText(result) {
   return JSON.parse(block.text);
 }
 
-test("MCP e2e: server lists exactly the 5 diet tools", async () => {
+test("MCP e2e: server lists exactly the 6 diet tools", async () => {
   await withClient(async (client) => {
     const tools = await client.listTools();
     const names = tools.tools.map((t) => t.name).sort();
     assert.deepEqual(names, [
+      "diet_check",
       "diet_count",
       "diet_dedupe",
       "diet_extract",
@@ -78,7 +79,7 @@ test("MCP e2e: the documented `serve` entry point works (dist/cli.js serve)", as
   await client.connect(transport);
   try {
     const tools = await client.listTools();
-    assert.equal(tools.tools.length, 5);
+    assert.equal(tools.tools.length, 6);
   } finally {
     await client.close();
   }
@@ -94,5 +95,21 @@ test("MCP e2e: diet_count labels tokens as estimates", async () => {
     assert.equal(counts.lines, 2);
     assert.equal(counts.bytes, 12);
     assert.ok(counts.tokensNote.includes("estimate"));
+  });
+});
+
+test("MCP e2e: diet_check through the real protocol reports missing items", async () => {
+  await withClient(async (client) => {
+    const result = await client.callTool({
+      name: "diet_check",
+      arguments: {
+        text: "PASS src/a.test.js (1ms)\nFAIL src/b.test.js\n",
+        planned: ["src/a.test.js", "src/c.test.js"],
+      },
+    });
+    const check = parseText(result);
+    assert.equal(check.survived, false);
+    assert.deepEqual(check.missing, ["src/c.test.js"]);
+    assert.equal(check.items[0].evidence, "PASS src/a.test.js (1ms)");
   });
 });
