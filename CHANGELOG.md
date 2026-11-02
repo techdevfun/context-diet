@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+
+- CLI `--root` confinement now resolves symlinks before the
+  outside-root check (`readInput`/`readListFile`): a symlink inside the
+  root pointing elsewhere (e.g. `examples/evil -> /etc/passwd`) can no
+  longer be read through `--input`/`--protect-file`/`--planned`/
+  `--markers`/`--fail-markers`/`--skipped`. Missing files still report
+  the usual ENOENT error.
+
 ## 0.5.0 — 2026-10-26
 
 Marker mode for the completeness check (from dev.to reader
