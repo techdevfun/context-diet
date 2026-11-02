@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { readFileSync } from "node:fs";
+import { readFileSync, realpathSync } from "node:fs";
 import { resolve, relative, sep } from "node:path";
 import { countText, splitLines } from "./tokens.js";
 import { dedupeText } from "./dedupe.js";
@@ -45,15 +45,33 @@ function parseArgs(argv: string[]): Record<string, string | boolean> {
   return out;
 }
 
+/**
+ * Resolve a caller-supplied path under --root, refusing escapes.
+ * Symlinks are resolved before the check: without realpathSync, a
+ * symlink inside the root pointing outside (e.g. examples/evil ->
+ * /etc/passwd) would pass the lexical check and be read.
+ */
+function confinedPath(args: Record<string, string | boolean>, key: string): string {
+  const root = realpathSync(resolve(String(args["root"] ?? process.cwd())));
+  const requested = resolve(root, String(args[key]));
+  let file: string;
+  try {
+    file = realpathSync(requested);
+  } catch {
+    // Missing file (or a missing path component): keep the lexical path
+    // so readFileSync below reports the usual ENOENT error.
+    file = requested;
+  }
+  const rel = relative(root, file);
+  if (rel.startsWith(".." + sep) || rel === ".." || file === root) {
+    throw new Error(`Refusing to read outside --root: ${args[key]}`);
+  }
+  return file;
+}
+
 function readInput(args: Record<string, string | boolean>): string {
   if (typeof args["input"] === "string" && args["input"] !== "") {
-    const root = resolve(String(args["root"] ?? process.cwd()));
-    const file = resolve(root, String(args["input"]));
-    const rel = relative(root, file);
-    if (rel.startsWith(".." + sep) || rel === ".." || resolve(file) === root) {
-      throw new Error(`Refusing to read outside --root: ${args["input"]}`);
-    }
-    return readFileSync(file, "utf8");
+    return readFileSync(confinedPath(args, "input"), "utf8");
   }
   return readFileSync(0, "utf8");
 }
@@ -85,12 +103,7 @@ function readListFile(args: Record<string, string | boolean>, key: string): stri
   if (typeof args[key] !== "string" || args[key] === "") {
     return [];
   }
-  const root = resolve(String(args["root"] ?? process.cwd()));
-  const file = resolve(root, String(args[key]));
-  const rel = relative(root, file);
-  if (rel.startsWith(".." + sep) || rel === ".." || resolve(file) === root) {
-    throw new Error(`Refusing to read outside --root: ${args[key]}`);
-  }
+  const file = confinedPath(args, key);
   // One item per line; blank lines carry no meaning and are ignored.
   // A trailing \r (Windows line endings) is stripped so the same file
   // works on both line-ending conventions.
@@ -182,7 +195,7 @@ async function main(): Promise<void> {
         } else {
           summary =
             `INCOMPLETE (${check.foundCount}/${check.plannedCount} found; ${check.missingCount} missing` +
-            (markerMode && check.executedFailCount > 0
+            (check.executedFailCount > 0
               ? `; ${check.executedFailCount} executed-fail`
               : "") +
             (check.skippedCount > 0 ? `; ${check.skippedCount} skipped` : "") +
