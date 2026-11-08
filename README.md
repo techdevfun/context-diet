@@ -91,7 +91,7 @@ budget with the query `test failure`:
 | After | 23 | 1,587 | 392 |
 | Saved | 86.4% | 80.0% | 79.8% |
 
-Manifest: dedupe −54 lines, extract −4, summarize −88. Verbatim: true.
+Manifest: dedupe −54 lines, extract −6, summarize −86. Verbatim: true.
 Token counts are estimates (documented chars/4 rule); lines and bytes
 are exact.
 
