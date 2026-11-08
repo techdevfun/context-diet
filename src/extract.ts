@@ -13,7 +13,18 @@ export interface ExtractResult {
   matchedLines: number;
 }
 
-const ERROR_RE = /(error|fail(?:ure|ed)?|exception|traceback|assert|fatal|panic|e[0-9a-z]+(?:-[0-9a-z]+)?\b.*\b(?:code|error))/i;
+/**
+ * Error-signal boost for extract scoring. The last two alternatives
+ * are deliberately narrow: "exit code" (e.g. "exit code 1") and
+ * bare error-code tokens (e.g. E401). An earlier version used
+ * `e[0-9a-z]+...code|error`, which matched ANY word starting with
+ * "e" followed anywhere later by "code"/"error" — so an innocent
+ * line like "see the example code in the docs" scored the same +5
+ * as a real error line and could displace a genuine query hit when
+ * maxChunks was small. Bare words ("example", "removes ... codes")
+ * are not error signals.
+ */
+const ERROR_RE = /(error|fail(?:ure|ed)?|exception|traceback|assert|fatal|panic|exit\s+code|\be[0-9]{2,}\b)/i;
 const HEADING_RE = /^\s{0,3}#{1,6}\s+\S|^\s*[A-Z][A-Za-z0-9 _/-]{2,60}:\s*$/;
 
 const STOPWORDS = new Set([
