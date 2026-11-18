@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- CLI `--fail-markers` with an empty (or all-blank) file no longer
+  disables the `["FAIL"]` default: only a non-empty list overrides
+  it. Previously the empty file mapped to `failMarkers: []`, so a
+  `FAIL` line scored executed-pass and a failing run exited 0.
 - CLI `--root` confinement now resolves symlinks before the
   outside-root check (`readInput`/`readListFile`): a symlink inside the
   root pointing elsewhere (e.g. `examples/evil -> /etc/passwd`) can no
