@@ -92,7 +92,12 @@ function readFailMarkersFile(args: Record<string, string | boolean>): string[] |
   if (typeof args["fail-markers"] !== "string" || args["fail-markers"] === "") {
     return undefined;
   }
-  return readListFile(args, "fail-markers");
+  const markers = readListFile(args, "fail-markers");
+  // An empty (or all-blank) file lists no markers, so it must not
+  // disable the ["FAIL"] default: only a non-empty list overrides it.
+  // Otherwise a stray empty file would silently turn every FAIL line
+  // into executed-pass and let a failing run exit 0.
+  return markers.length > 0 ? markers : undefined;
 }
 
 function readSkippedFile(args: Record<string, string | boolean>): string[] {
