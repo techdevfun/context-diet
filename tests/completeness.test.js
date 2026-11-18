@@ -215,3 +215,32 @@ test("CLI: fail-markers without markers exits 1", () => {
   assert.equal(run.status, 1);
   assert.match(run.stderr, /failMarkers requires markers/);
 });
+
+test("CLI: an empty fail-markers file keeps the FAIL default", () => {
+  // An empty (or all-blank) file lists no markers: it must not disable
+  // the default, or a FAIL line would silently score executed-pass.
+  const run = runCli({
+    planned: "t1\n",
+    markers: "PASS\nFAIL\n",
+    failMarkers: "",
+    stdin: "FAIL t1\n",
+  });
+  assert.equal(run.status, 1);
+  const result = JSON.parse(run.stdout);
+  assert.equal(result.items[0].status, "executed-fail");
+  assert.equal(result.executedFailCount, 1);
+  assert.equal(result.survived, false);
+});
+
+test("CLI: a non-empty fail-markers file still overrides the FAIL default", () => {
+  const run = runCli({
+    planned: "t1\nt2\n",
+    markers: "PASS\nDONE\n",
+    failMarkers: "DONE\n",
+    stdin: "DONE t1\nPASS t2\n",
+  });
+  assert.equal(run.status, 1);
+  const result = JSON.parse(run.stdout);
+  assert.equal(result.items.find((i) => i.item === "t1").status, "executed-fail");
+  assert.equal(result.items.find((i) => i.item === "t2").status, "executed-pass");
+});
